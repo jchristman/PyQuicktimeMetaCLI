@@ -1,6 +1,12 @@
+# Library written by Joshua Christman
+# This file is meant purely as an interface for Parsing the atom tree from a 
+# quicktime movie file (mp4, m4v, mov, etc). It was written using Apple's 
+# file format definition.
+
 import struct, string
 
 ### GLOBALS ###
+# This was stolen from a java library
 ATOM_CONTAINER_TYPES = ["moov", "trak", "udta", "tref", "imap",
         "mdia", "minf", "stbl", "edts", "mdra", 
         "rmra", "imag", "vnrp", "dinf"]
@@ -24,36 +30,26 @@ class AtomTree:
         self.expandTreeHelper(self.root)
 
     def expandTreeHelper(self, parent):
-        parent.getChildren()
+        parent.generateChildren()
         for child in parent.children:
             self.expandTreeHelper(child)
 
-    def findAllAtomsOfType(self, type):
-        atoms = []
-        self.findAllAtomsHelper(self.root, type, atoms)
-        return atoms
+    # This function takes a path of form 'moov.udta.meta' and returns the atom object
+    # or False if it does not exist
+    def getAtomByPath(self, path):
+        cur = self.root
+        for step in path.split('.')[1:]: # We don't need the first step of moov
+            prev = cur
+            for child in cur.children:
+                if child.type == step:
+                    cur = child
+                    break
+            if prev == cur: # Then we didn't find a child with the next step of the path
+                return False
+        return cur
         
-    def findAllAtomsHelper(self, parent, type, atoms):
-        for child in parent.children:
-            if child.type == type:
-                atoms.append(child)
-            self.findAllAtomsHelper(child, type, atoms)
-
     def serialize(self):
-        self.fixAtomSizes()
         return self.root.serialize()
-
-    def fixAtomSizes(self):
-        self.fixAtomSizesHelper(self.root)
-
-    def fixAtomSizesHelper(self, parent):
-        size = 8
-        if len(parent.children) == 0:
-            return
-        for child in parent.children:
-            size += child.size
-            self.fixAtomSizesHelper(child)
-        parent.size = size
 
     def printTree(self):
         self.printTreeHelper(self.root, 0)
@@ -65,8 +61,9 @@ class AtomTree:
         
     ### Atom Data Class ###
     class Atom:
-        def __init__(self, tree, offset=False, type=False, data=False):
+        def __init__(self, tree, offset=False, type=False, data=False, parent=None):
             self.tree = tree
+            self.parent = parent
             if not type and not data:
                 self.size = struct.unpack('>L', self.tree.movie[offset : offset + 4])[0]
                 self.type = self.tree.movie[offset + 4 : offset + 8]
@@ -81,7 +78,7 @@ class AtomTree:
             if not data == False:   self.data = data
             self.size = 8 + len(self.data)
 
-        def getChildren(self):
+        def generateChildren(self):
             try: offset = self.offset + 8 # If we don't know our offset, we can't get our children
             except: return False
             
@@ -92,7 +89,7 @@ class AtomTree:
                 if self.type == 'udta':
                     if offset + 4 >= self.offset + self.size: # This is the optional null terminating 32 bit integer
                         break
-                child = AtomTree.Atom(self.tree, offset)
+                child = AtomTree.Atom(self.tree, offset, parent=self)
                 self.children.append(child)
                 offset += child.size
 
