@@ -9,9 +9,11 @@ usage = '''
 if __name__ == '__main__':
     try: movie_path = sys.argv[1]
     except: print usage; exit()
-    movie = open('tim-drm-ref.mov','rb').read()
+    movie = open(movie_path,'rb').read()
     movie_atoms = quicktime.AtomTree(movie)
     meta_atom = movie_atoms.getAtomByPath('moov.udta.meta')
     if not meta_atom:
         print 'No metadata atom was found at path moov.udta.meta!'
         print 'Creating one now'
+    else:
+        print meta_atom
